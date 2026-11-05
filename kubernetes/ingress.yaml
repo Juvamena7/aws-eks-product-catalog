@@ -1,0 +1,26 @@
+# Apply only after installing the AWS Load Balancer Controller and configuring its IAM role.
+# Replace the certificate ARN and subnet/security settings for your account/region.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: product-catalog
+  namespace: product-catalog
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /healthz
+    # Uncomment and set a real ACM certificate ARN to use HTTPS:
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:ACCOUNT_ID:certificate/CERTIFICATE_ID
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+spec:
+  ingressClassName: alb
+  rules:
+    - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: product-catalog
+                port:
+                  number: 80

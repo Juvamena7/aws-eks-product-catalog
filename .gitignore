@@ -1,0 +1,20 @@
+node_modules/
+.env
+*.tfstate
+*.tfstate.*
+.terraform/
+terraform.tfvars
+kubeconfig
+
+# Sensitive private keys
+*.pem
+*.key
+
+# Terraform plan files
+*.tfplan
+tfplan
+plan-review.txt
+
+# Local IAM policy documents
+github-oidc-trust-policy.json
+github-ecr-policy.json

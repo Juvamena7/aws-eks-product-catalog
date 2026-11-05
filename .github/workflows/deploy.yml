@@ -1,0 +1,71 @@
+name: Build, test, push, and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: product-catalog
+  EKS_CLUSTER_NAME: product-catalog-eks
+  K8S_NAMESPACE: product-catalog
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials with GitHub OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_GITHUB_ACTIONS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sign in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: docker build --pull -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+
+      - name: Basic image smoke test
+        run: |
+          docker run -d --name catalog-test -p 3000:3000 "${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          for i in $(seq 1 15); do
+            if curl --fail http://localhost:3000/healthz; then break; fi
+            sleep 2
+          done
+          curl --fail http://localhost:3000/api/products
+          docker rm -f catalog-test
+
+      - name: Push immutable commit-tagged image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+
+      - name: Deploy
+        env:
+          IMAGE_URI: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          kubectl apply -f kubernetes/service-account.yaml
+          kubectl apply -f kubernetes/deployment.yaml
+          kubectl apply -f kubernetes/service.yaml
+          kubectl apply -f kubernetes/hpa.yaml
+          kubectl set image deployment/product-catalog product-catalog="$IMAGE_URI" -n "$K8S_NAMESPACE"
+          kubectl rollout status deployment/product-catalog -n "$K8S_NAMESPACE" --timeout=180s
+          kubectl get pods,svc,hpa -n "$K8S_NAMESPACE"

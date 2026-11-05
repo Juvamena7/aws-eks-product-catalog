@@ -1,0 +1,9 @@
+{
+  "name": "aws-eks-product-catalog",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Demo Product Catalog app for AWS EKS DevOps project",
+  "scripts": {
+    "start": "node app/server.js"
+  }
+}
