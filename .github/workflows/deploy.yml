@@ -35,12 +35,12 @@ jobs:
       - name: Build image
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
         run: docker build --pull -t "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
 
       - name: Basic image smoke test
         run: |
-          docker run -d --name catalog-test -p 3000:3000 "${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          docker run -d --name catalog-test -p 3000:3000 "${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}-${{ github.run_attempt }}"
           for i in $(seq 1 15); do
             if curl --fail http://localhost:3000/healthz; then break; fi
             sleep 2
@@ -51,7 +51,7 @@ jobs:
       - name: Push immutable commit-tagged image
         env:
           REGISTRY: ${{ steps.ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.sha }}-${{ github.run_attempt }}
         run: docker push "$REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
       - name: Configure kubectl
@@ -60,7 +60,7 @@ jobs:
 
       - name: Deploy
         env:
-          IMAGE_URI: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          IMAGE_URI: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}-${{ github.run_attempt }}
         run: |
           kubectl apply -f kubernetes/service-account.yaml
           kubectl apply -f kubernetes/deployment.yaml
